@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/bradfitz/slice"
 	"log"
 	"net"
 	"net/rpc"
@@ -14,10 +15,148 @@ import (
 	"sync"
 )
 
+func main() {
+	// establish wait group
+	var wg sync.WaitGroup
+	// process config toml file
+	var config tomlConfig
+	// use serverConfig.toml to set up tomlConfig server configurations
+	setUpServerConfig(&config)
+	// get size of matrices from user
+	matricesSize, _ := getMatrixSizeFromUser()
+	fmt.Println(matricesSize)
+	fmt.Println(fmt.Sprintf("Matrices Size: %d", matricesSize))
+
+	// make results list
+	var resultList = initializeResultsList(int(matricesSize))
+
+	// user manually builds matrices
+	fmt.Println("\n----- MATRIX 1 -----")
+	firstMatrix := buildMatrixFromUserInput(int(matricesSize))
+	fmt.Println("\n----- MATRIX 2 -----")
+	secondMatrix := buildMatrixFromUserInput(int(matricesSize))
+
+	// wrap each matrix in Matrix struct
+	matrix1 := Matrix{matrixArray: firstMatrix}
+	matrix2 := Matrix{matrixArray: secondMatrix}
+
+	// print matrices
+	fmt.Println("\n---------- MATRIX 1 ----------")
+	fmt.Println(matrix1.toString())
+	fmt.Println("\n---------- MATRIX 2 ----------")
+	fmt.Println(matrix2.toString())
+
+	// fmt.Println(matricesSize - 1)
+	// set up connection array based on how many connections are needed
+	var connSliceArray = config.establishServerConnections(int(matricesSize) - 1)
+	//fmt.Println(connSliceArray)
+
+	//establish main server connection
+	conn, err := net.Dial("tcp", "localhost:1242")
+	if err != nil {
+		log.Fatal("Connecting:", err)
+	}
+	fmt.Printf("Connection made from client to %v\n", conn)
+
+	// connect to a server port by default to connect to the main server
+	wg.Add(1)
+	go func(m [][]int, m1 [][]int, wg *sync.WaitGroup, rm []ResultMatrixPriority) {
+		//fmt.Println("Calling remote server to multiply")
+		defer wg.Done()
+		//fmt.Printf("Connection: %v\n", conn)
+		// instantiate RPC object
+		matrixMultiply := &MatrixMultRPC{client: rpc.NewClient(conn)}
+		//fmt.Printf("here.\n")
+		// make a one-element 2d array to pass one row of matrix 1 to the remote call
+		partialM1 := make([][]int, 1)
+		partialM1[0] = m[0]
+		// fmt.Println(partialM1)
+		//fmt.Printf("here..\n")
+		// call remote function using RPC object
+		multiplicationResult := matrixMultiply.MultiplyMatrix(partialM1, m1)
+		//fmt.Printf("here...MAIN\n")
+		// make Matrix object out of result
+		resultMatrix := Matrix{matrixArray: multiplicationResult}
+		fmt.Println(resultMatrix)
+		// make ResultMatrixPriority object that keeps track of order and send into channel
+		rm[0] = ResultMatrixPriority{0, resultMatrix}
+		fmt.Println("Main DONE.")
+	}(firstMatrix, secondMatrix, &wg, resultList)
+
+	//fmt.Print("Length of connArray: ")
+	//fmt.Println(len(connSliceArray))
+	// now send stuff to the servers to be calculated
+	for j := 0; j < len(connSliceArray); j++ {
+		//fmt.Println("entered the j loop")
+		//reassign j loop counter
+		jj := j
+		//fmt.Printf("jj: %d\n", jj)
+		// Create a struct, that mimics all methods provided by interface.
+		// It is not compulsory, we are doing it here, just to simulate a traditional method call.
+		wg.Add(1)
+		go func(index int, mx [][]int, m2 [][]int, wg *sync.WaitGroup, rm []ResultMatrixPriority) {
+			//fmt.Println("Calling remote server to multiply - J LOOP")
+			defer wg.Done()
+			//fmt.Printf("Connection: %v\n", connSliceArray[jj])
+			// instantiate RPC object
+			matrixMultiply := &MatrixMultRPC{client: rpc.NewClient(connSliceArray[jj])}
+			//fmt.Print("RPC Obj: ")
+			//fmt.Println(matrixMultiply)
+			//fmt.Printf("here.\n")
+			// make a one-element 2d array to pass one row of matrix 1 to the remote call
+			partialM1 := make([][]int, 1)
+			partialM1[0] = mx[jj+1]
+			//fmt.Println(partialM1)
+			//fmt.Printf("here..\n")
+			multiplicationResult := matrixMultiply.MultiplyMatrix(partialM1, m2)
+			//fmt.Printf("here...J-LOOP\n")
+			// make Matrix object out of result
+			resultMatrix := Matrix{matrixArray: multiplicationResult}
+			fmt.Println(resultMatrix)
+			// make ResultMatrixPriority object that keeps track of order and send into channel
+			rm[jj+1] = ResultMatrixPriority{jj + 1, resultMatrix}
+			fmt.Println("DONE.")
+		}(jj, firstMatrix, secondMatrix, &wg, resultList)
+	}
+
+	wg.Wait()
+	fmt.Println("\n----------- PRODUCT MATRIX -----------")
+	//now print out the result list to see the final result matrix
+	fmt.Println(resultMatrixToString(resultList))
+}
+
+// --------- STRUCT/Types ------------------
+
 type tomlConfig struct {
 	Title   string
 	Owner   ownerInfo
 	Servers map[string]server
+}
+
+func (c tomlConfig) establishServerConnections(num int) []net.Conn {
+	var connArray []net.Conn
+	// set up connection array based on how many connections are needed
+	var count = 0 //this will count up to the number of connection that are needed
+	for i := range c.Servers {
+		// establish connection with server
+		// FIRST get server address string
+		serverAddress := c.Servers[i].IP + ":" + c.Servers[i].Port
+		conn, err := net.Dial("tcp", serverAddress)
+		if err != nil {
+			log.Fatal("Connecting:", err)
+		}
+		fmt.Printf("Connection made from client to %v\n", conn)
+		// add connection to conn array
+		connArray = append(connArray, conn)
+		// increment count
+		count++
+		// check if count matches number of needed connections
+		if count >= num || count >= len(c.Servers) {
+			//if so stop making connections
+			break
+		}
+	}
+	return connArray
 }
 
 type server struct {
@@ -36,29 +175,6 @@ type MatrixMultRPC struct {
 	client *rpc.Client
 }
 
-// struct to hold matrix data structure (2d slice)
-type Matrix struct {
-	matrixArray [][]int
-}
-
-type ResultMatrixPriority struct {
-	order        int
-	resultMatrix Matrix
-}
-
-// Slice type that can be safely shared between goroutines
-type ResultMatrixPriorityList struct {
-	sync.RWMutex
-	items []interface{}
-}
-
-// Appends an item to the concurrent slice
-func (cs *ResultMatrixPriorityList) Append(item ResultMatrixPriority) {
-	cs.Lock()
-	defer cs.Unlock()
-	cs.items = append(cs.items, item)
-}
-
 // remote client function call
 func (t *MatrixMultRPC) MultiplyMatrix(matrix1, matrix2 [][]int) [][]int {
 	// use shared struct to pass matrix arguments to server
@@ -73,6 +189,36 @@ func (t *MatrixMultRPC) MultiplyMatrix(matrix1, matrix2 [][]int) [][]int {
 	// reply from server
 	return reply
 }
+
+// struct to hold matrix data structure (2d slice)
+type Matrix struct {
+	matrixArray [][]int
+}
+
+// Matrix print scheme from:
+// https://rosettacode.org/wiki/Matrix_multiplication#Library_go.matrix
+// modified to fit the needs of this program
+func (m Matrix) toString() string {
+	rows := len(m.matrixArray)
+	cols := len(m.matrixArray[0])
+	out := ""
+	for r := 0; r < rows; r++ {
+		if r > 0 {
+			out += "\n"
+		}
+		for c := 0; c < cols; c++ {
+			out += fmt.Sprintf("%7d", m.matrixArray[r][c])
+		}
+	}
+	return out
+}
+
+type ResultMatrixPriority struct {
+	order        int
+	resultMatrix Matrix
+}
+
+// ----------- FUNCTIONS ------------------
 
 // gets matrix size from user - with input error checking
 func getMatrixSizeFromUser() (int64, error) {
@@ -140,24 +286,6 @@ func buildMatrixFromUserInput(matricesSize int) [][]int {
 	return matrix
 }
 
-// Matrix print scheme from:
-// https://rosettacode.org/wiki/Matrix_multiplication#Library_go.matrix
-// modified to fit the needs of this program
-func (m Matrix) toString() string {
-	rows := len(m.matrixArray)
-	cols := len(m.matrixArray[0])
-	out := ""
-	for r := 0; r < rows; r++ {
-		if r > 0 {
-			out += "\n"
-		}
-		for c := 0; c < cols; c++ {
-			out += fmt.Sprintf("%7d", m.matrixArray[r][c])
-		}
-	}
-	return out
-}
-
 func setUpServerConfig(config *tomlConfig) {
 	if _, err := toml.DecodeFile("serverConfig.toml", config); err != nil {
 		fmt.Println(err)
@@ -169,151 +297,31 @@ func setUpServerConfig(config *tomlConfig) {
 	}
 }
 
-func (c tomlConfig) establishServerConnections(num int) []net.Conn {
-	var connArray []net.Conn
-	// set up connection array based on how many connections are needed
-	var count = 0 //this will count up to the number of connection that are needed
-	for i := range c.Servers {
-		// establish connection with server
-		// FIRST get server address string
-		serverAddress := c.Servers[i].IP + ":" + c.Servers[i].Port
-		conn, err := net.Dial("tcp", serverAddress)
-		if err != nil {
-			log.Fatal("Connecting:", err)
-		}
-		fmt.Printf("Connection made from client to %v\n", conn)
-		// add connection to conn array
-		connArray = append(connArray, conn)
-		// increment count
-		count++
-		// check if count matches number of needed connections
-		if count >= num || count >= len(c.Servers) {
-			//if so stop making connections
-			break
-		}
+//Takes in a number of partitions and returns a list of maps of that size.
+func initializeResultsList(size int) []ResultMatrixPriority {
+	var resList []ResultMatrixPriority
+	for partitionIteration := 0; partitionIteration < size; partitionIteration++ {
+		var newEntry ResultMatrixPriority
+		resList = append(resList, newEntry)
 	}
-	return connArray
+	return resList
 }
 
-//func appendResultsMatrixList(rm ResultMatrixPriorityList, outChan <-chan ResultMatrixPriority) {
-//	for {
-//		outData := <- outChan
-//		rm.Append(outData)
-//	}
-//
-//}
-
-func main() {
-	// establish wait group
-	var wg sync.WaitGroup
-	// process config toml file
-	var config tomlConfig
-	// use serverConfig.toml to set up tomlConfig server configurations
-	setUpServerConfig(&config)
-	// get size of matrices from user
-	matricesSize, _ := getMatrixSizeFromUser()
-	fmt.Println(matricesSize)
-	fmt.Println(fmt.Sprintf("Matrices Size: %d", matricesSize))
-
-	// user manually builds matrices
-	fmt.Println("\n----- MATRIX 1 -----")
-	firstMatrix := buildMatrixFromUserInput(int(matricesSize))
-	fmt.Println("\n----- MATRIX 2 -----")
-	secondMatrix := buildMatrixFromUserInput(int(matricesSize))
-
-	// wrap each matrix in Matrix struct
-	matrix1 := Matrix{matrixArray: firstMatrix}
-	matrix2 := Matrix{matrixArray: secondMatrix}
-
-	// print matrices
-	fmt.Println("\n----- MATRIX 1 -----")
-	fmt.Println(matrix1.toString())
-	fmt.Println("\n----- MATRIX 2 -----")
-	fmt.Println(matrix2.toString())
-
-	// fmt.Println(matricesSize - 1)
-	// set up connection array based on how many connections are needed
-	var connSliceArray = config.establishServerConnections(int(matricesSize) - 1)
-	//fmt.Println(connSliceArray)
-
-	//establish main server connection
-	conn, err := net.Dial("tcp", "localhost:1242")
-	if err != nil {
-		log.Fatal("Connecting:", err)
+func resultMatrixToString(rawResults []ResultMatrixPriority) string {
+	// sort result matrix by "order" to make sure results are in order
+	slice.SortInterface(rawResults[:], func(i, j int) bool {
+		return rawResults[i].order < rawResults[j].order
+	})
+	out := ""
+	for rawRow := range rawResults {
+		matrix := rawResults[rawRow]
+		targetMatrix := matrix.resultMatrix
+		if rawRow > 0 {
+			out += "\n"
+		}
+		for element := range targetMatrix.matrixArray[0] {
+			out += fmt.Sprintf("%10d", targetMatrix.matrixArray[0][element])
+		}
 	}
-	fmt.Printf("Connection made from client to %v\n", conn)
-
-	// this will hold all the results coming back form the server
-	//resultMatrices := make([]ResultMatrixPriority, matricesSize)
-	// channel that will receive the results
-	//resultsCh := make(chan ResultMatrixPriority)
-
-	var resultMatrixList ResultMatrixPriorityList
-
-	//go appendResultsMatrixList(resultMatrixList, resultsCh)
-
-	// connect to a server port by default to connect to the main server
-	wg.Add(1)
-	go func(m [][]int, m1 [][]int, wg *sync.WaitGroup, rm ResultMatrixPriorityList) {
-		//fmt.Println("Calling remote server to multiply")
-		defer wg.Done()
-		//fmt.Printf("Connection: %v\n", conn)
-		// instantiate RPC object
-		matrixMultiply := &MatrixMultRPC{client: rpc.NewClient(conn)}
-		//fmt.Printf("here.\n")
-		// make a one-element 2d array to pass one row of matrix 1 to the remote call
-		partialM1 := make([][]int, 1)
-		partialM1[0] = m[0]
-		// fmt.Println(partialM1)
-		//fmt.Printf("here..\n")
-		// call remote function using RPC object
-		multiplicationResult := matrixMultiply.MultiplyMatrix(partialM1, m1)
-		//fmt.Printf("here...MAIN\n")
-		// make Matrix object out of result
-		resultMatrix := Matrix{matrixArray: multiplicationResult}
-		fmt.Println(resultMatrix)
-		// make ResultMatrixPriority object that keeps track of order and send into channel
-		rm.Append(ResultMatrixPriority{0, resultMatrix})
-		fmt.Println("Main DONE.")
-	}(firstMatrix, secondMatrix, &wg, resultMatrixList)
-
-	//fmt.Print("Length of connArray: ")
-	//fmt.Println(len(connSliceArray))
-	// now send stuff to the servers to be calculated
-	for j := 0; j < len(connSliceArray); j++ {
-		//fmt.Println("entered the j loop")
-		//reassign j loop counter
-		jj := j
-		//fmt.Printf("jj: %d\n", jj)
-		// Create a struct, that mimics all methods provided by interface.
-		// It is not compulsory, we are doing it here, just to simulate a traditional method call.
-		wg.Add(1)
-		go func(index int, mx [][]int, m2 [][]int, wg *sync.WaitGroup, rm ResultMatrixPriorityList) {
-			//fmt.Println("Calling remote server to multiply - J LOOP")
-			defer wg.Done()
-			//fmt.Printf("Connection: %v\n", connSliceArray[jj])
-			// instantiate RPC object
-			matrixMultiply := &MatrixMultRPC{client: rpc.NewClient(connSliceArray[jj])}
-			//fmt.Print("RPC Obj: ")
-			//fmt.Println(matrixMultiply)
-			//fmt.Printf("here.\n")
-			// make a one-element 2d array to pass one row of matrix 1 to the remote call
-			partialM1 := make([][]int, 1)
-			partialM1[0] = mx[jj+1]
-			//fmt.Println(partialM1)
-			//fmt.Printf("here..\n")
-			multiplicationResult := matrixMultiply.MultiplyMatrix(partialM1, m2)
-			//fmt.Printf("here...J-LOOP\n")
-			// make Matrix object out of result
-			resultMatrix := Matrix{matrixArray: multiplicationResult}
-			fmt.Println(resultMatrix)
-			// make ResultMatrixPriority object that keeps track of order and send into channel
-			rm.Append(ResultMatrixPriority{jj, resultMatrix})
-			fmt.Println("DONE.")
-		}(jj, firstMatrix, secondMatrix, &wg, resultMatrixList)
-	}
-
-	wg.Wait()
-
-	fmt.Println(resultMatrixList)
+	return out
 }
