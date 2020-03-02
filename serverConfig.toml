@@ -1,0 +1,34 @@
+# This TOML file has the server information for the matrix multiplication program
+title = "Server Configurations for Multiple Server Matrix Multiplication"
+
+[owner]
+name = "Joe Matta"
+organization = "BSU"
+bio = "Graduate Student - Computer Science"
+
+[servers]
+  [servers.a]
+    IP = "localhost"
+    Port = "1234"
+  [servers.b]
+    IP = "localhost"
+    Port = "1235"
+  [servers.c]
+    IP = "localhost"
+    Port = "1236"
+  [servers.d]
+    IP = "localhost"
+    Port = "1237"
+  [servers.e]
+    IP = "localhost"
+    Port = "1238"
+  [servers.f]
+    IP = "localhost"
+    Port = "1239"
+  [servers.g]
+    IP = "localhost"
+    Port = "1240"
+
+[main]
+    IP = "localhost"
+    Port = "1242"
