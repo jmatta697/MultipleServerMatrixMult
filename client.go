@@ -86,37 +86,39 @@ func main() {
 	//fmt.Print("Length of connArray: ")
 	//fmt.Println(len(connSliceArray))
 	// now send stuff to the servers to be calculated
-	for j := 0; j < len(connSliceArray); j++ {
-		//fmt.Println("entered the j loop")
-		//reassign j loop counter
-		jj := j
-		//fmt.Printf("jj: %d\n", jj)
-		// Create a struct, that mimics all methods provided by interface.
-		// It is not compulsory, we are doing it here, just to simulate a traditional method call.
-		wg.Add(1)
-		go func(index int, mx [][]int, m2 [][]int, wg *sync.WaitGroup, rm []ResultMatrixPriority) {
-			//fmt.Println("Calling remote server to multiply - J LOOP")
-			defer wg.Done()
-			//fmt.Printf("Connection: %v\n", connSliceArray[jj])
-			// instantiate RPC object
-			matrixMultiply := &MatrixMultRPC{client: rpc.NewClient(connSliceArray[jj])}
-			//fmt.Print("RPC Obj: ")
-			//fmt.Println(matrixMultiply)
-			//fmt.Printf("here.\n")
-			// make a one-element 2d array to pass one row of matrix 1 to the remote call
-			partialM1 := make([][]int, 1)
-			partialM1[0] = mx[jj+1]
-			//fmt.Println(partialM1)
-			//fmt.Printf("here..\n")
-			multiplicationResult := matrixMultiply.MultiplyMatrix(partialM1, m2)
-			//fmt.Printf("here...J-LOOP\n")
-			// make Matrix object out of result
-			resultMatrix := Matrix{matrixArray: multiplicationResult}
-			fmt.Println(resultMatrix)
-			// make ResultMatrixPriority object that keeps track of order and send into channel
-			rm[jj+1] = ResultMatrixPriority{jj + 1, resultMatrix}
-			fmt.Println("DONE.")
-		}(jj, firstMatrix, secondMatrix, &wg, resultList)
+	if matricesSize > 1 { // only run this part is matrix size is greater than 1
+		for j := 0; j < len(connSliceArray); j++ {
+			//fmt.Println("entered the j loop")
+			//reassign j loop counter
+			jj := j
+			//fmt.Printf("jj: %d\n", jj)
+			// Create a struct, that mimics all methods provided by interface.
+			// It is not compulsory, we are doing it here, just to simulate a traditional method call.
+			wg.Add(1)
+			go func(index int, mx [][]int, m2 [][]int, wg *sync.WaitGroup, rm []ResultMatrixPriority) {
+				//fmt.Println("Calling remote server to multiply - J LOOP")
+				defer wg.Done()
+				//fmt.Printf("Connection: %v\n", connSliceArray[jj])
+				// instantiate RPC object
+				matrixMultiply := &MatrixMultRPC{client: rpc.NewClient(connSliceArray[jj])}
+				//fmt.Print("RPC Obj: ")
+				//fmt.Println(matrixMultiply)
+				//fmt.Printf("here.\n")
+				// make a one-element 2d array to pass one row of matrix 1 to the remote call
+				partialM1 := make([][]int, 1)
+				partialM1[0] = mx[jj+1]
+				//fmt.Println(partialM1)
+				//fmt.Printf("here..\n")
+				multiplicationResult := matrixMultiply.MultiplyMatrix(partialM1, m2)
+				//fmt.Printf("here...J-LOOP\n")
+				// make Matrix object out of result
+				resultMatrix := Matrix{matrixArray: multiplicationResult}
+				fmt.Println(resultMatrix)
+				// make ResultMatrixPriority object that keeps track of order and send into channel
+				rm[jj+1] = ResultMatrixPriority{jj + 1, resultMatrix}
+				fmt.Println("DONE.")
+			}(jj, firstMatrix, secondMatrix, &wg, resultList)
+		}
 	}
 
 	wg.Wait()
