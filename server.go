@@ -63,7 +63,7 @@ func main() {
 		}
 		// This statement links rpc server to the socket, and allows rpc server to accept
 		// rpc request coming from that socket.
-		fmt.Printf("MAIN Server %d : Port %d -> setup\n", server, l1)
+		fmt.Printf(" Server %d : Port %d -> setup\n", server, l1)
 		server.Accept(l1)
 	}()
 
@@ -80,7 +80,7 @@ func main() {
 		}
 		// This statement links rpc server to the socket, and allows rpc server to accept
 		// rpc request coming from that socket.
-		fmt.Printf("MAIN Server %d : Port %d -> setup\n", server, l1)
+		fmt.Printf(" Server %d : Port %d -> setup\n", server, l1)
 		server.Accept(l1)
 	}()
 
@@ -97,7 +97,7 @@ func main() {
 		}
 		// This statement links rpc server to the socket, and allows rpc server to accept
 		// rpc request coming from that socket.
-		fmt.Printf("MAIN Server %d : Port %d -> setup\n", server, l1)
+		fmt.Printf(" Server %d : Port %d -> setup\n", server, l1)
 		server.Accept(l1)
 	}()
 
@@ -114,7 +114,7 @@ func main() {
 		}
 		// This statement links rpc server to the socket, and allows rpc server to accept
 		// rpc request coming from that socket.
-		fmt.Printf("MAIN Server %d : Port %d -> setup\n", server, l1)
+		fmt.Printf(" Server %d : Port %d -> setup\n", server, l1)
 		server.Accept(l1)
 	}()
 
@@ -131,7 +131,7 @@ func main() {
 		}
 		// This statement links rpc server to the socket, and allows rpc server to accept
 		// rpc request coming from that socket.
-		fmt.Printf("MAIN Server %d : Port %d -> setup\n", server, l1)
+		fmt.Printf(" Server %d : Port %d -> setup\n", server, l1)
 		server.Accept(l1)
 	}()
 
@@ -148,7 +148,7 @@ func main() {
 		}
 		// This statement links rpc server to the socket, and allows rpc server to accept
 		// rpc request coming from that socket.
-		fmt.Printf("MAIN Server %d : Port %d -> setup\n", server, l1)
+		fmt.Printf(" Server %d : Port %d -> setup\n", server, l1)
 		server.Accept(l1)
 	}()
 
@@ -165,7 +165,7 @@ func main() {
 		}
 		// This statement links rpc server to the socket, and allows rpc server to accept
 		// rpc request coming from that socket.
-		fmt.Printf("MAIN Server %d : Port %d -> setup\n", server, l1)
+		fmt.Printf(" Server %d : Port %d -> setup\n", server, l1)
 		server.Accept(l1)
 	}()
 
@@ -181,45 +181,7 @@ func main() {
 	}
 	// This statement links rpc server to the socket, and allows rpc server to accept
 	// rpc request coming from that socket.
-	fmt.Printf("MAIN Server %d : Port %d -> setup\n", server, l1)
+	fmt.Printf(" Server %d : Port %d -> setup\n", server, l1)
 	server.Accept(l1)
 
 }
-
-// OLD WAY OF DOING IT BELOW
-
-//// list of port numbers to use (this list does not include the main server)
-//var portNums = []string{":1234", ":1235", ":1236", ":1237", ":1238", ":1239", ":1240"}
-//// map to hold server:port pairs
-//serverListener := make(map[*rpc.Server]net.Listener)
-//// set up all aux servers
-//for i := 0; i < len(portNums); i++ {
-//	ii := i
-//	//Creating an instance of struct which implement MatrixMult interface
-//	arith := new(MatrixMult)
-//	server := rpc.NewServer()
-//	// fmt.Println(portNums[ii])
-//	// Register a new rpc server (In most cases, you will use default server only)
-//	// And register struct we created above by name "Arith"
-//	// The wrapper method here ensures that only structs which implement Arith interface
-//	// are allowed to register themselves.
-//	registerArith(server, arith)
-//	// Listen for incoming tcp packets on specified port.
-//	l, e := net.Listen("tcp", portNums[ii])
-//	if e != nil {
-//		log.Fatal("listen error:", e)
-//	}
-//	// append to server/listener map
-//	serverListener[server] = l
-//}
-//
-//// start all servers listening, except last
-//for server := range serverListener{
-//	// This statement links rpc server to the socket, and allows rpc server to accept
-//	// rpc request coming from that socket.
-//	s := server
-//	go func(serv *rpc.Server) {
-//		fmt.Printf("Server %d : Port %d -> setup\n", serv, serverListener[serv])
-//		server.Accept(serverListener[server])
-//	}(s)
-//}

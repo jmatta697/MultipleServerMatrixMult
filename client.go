@@ -24,7 +24,6 @@ func main() {
 	setUpServerConfig(&config)
 	// get size of matrices from user
 	matricesSize, _ := getMatrixSizeFromUser()
-	fmt.Println(matricesSize)
 	fmt.Println(fmt.Sprintf("Matrices Size: %d", matricesSize))
 
 	// make results list
@@ -45,11 +44,10 @@ func main() {
 	fmt.Println(matrix1.toString())
 	fmt.Println("\n---------- MATRIX 2 ----------")
 	fmt.Println(matrix2.toString())
+	fmt.Println()
 
-	// fmt.Println(matricesSize - 1)
 	// set up connection array based on how many connections are needed
 	var connSliceArray = config.establishServerConnections(int(matricesSize) - 1)
-	//fmt.Println(connSliceArray)
 
 	//establish main server connection
 	conn, err := net.Dial("tcp", "localhost:1242")
@@ -61,56 +59,38 @@ func main() {
 	// connect to a server port by default to connect to the main server
 	wg.Add(1)
 	go func(m [][]int, m1 [][]int, wg *sync.WaitGroup, rm []ResultMatrixPriority) {
-		//fmt.Println("Calling remote server to multiply")
 		defer wg.Done()
-		//fmt.Printf("Connection: %v\n", conn)
 		// instantiate RPC object
 		matrixMultiply := &MatrixMultRPC{client: rpc.NewClient(conn)}
-		//fmt.Printf("here.\n")
 		// make a one-element 2d array to pass one row of matrix 1 to the remote call
 		partialM1 := make([][]int, 1)
 		partialM1[0] = m[0]
-		// fmt.Println(partialM1)
-		//fmt.Printf("here..\n")
 		// call remote function using RPC object
 		multiplicationResult := matrixMultiply.MultiplyMatrix(partialM1, m1)
-		//fmt.Printf("here...MAIN\n")
 		// make Matrix object out of result
 		resultMatrix := Matrix{matrixArray: multiplicationResult}
 		fmt.Println(resultMatrix)
 		// make ResultMatrixPriority object that keeps track of order and send into channel
 		rm[0] = ResultMatrixPriority{0, resultMatrix}
-		fmt.Println("Main DONE.")
+		fmt.Println("MAIN DONE.")
 	}(firstMatrix, secondMatrix, &wg, resultList)
 
-	//fmt.Print("Length of connArray: ")
-	//fmt.Println(len(connSliceArray))
 	// now send stuff to the servers to be calculated
 	if matricesSize > 1 { // only run this part is matrix size is greater than 1
 		for j := 0; j < len(connSliceArray); j++ {
-			//fmt.Println("entered the j loop")
 			//reassign j loop counter
 			jj := j
-			//fmt.Printf("jj: %d\n", jj)
 			// Create a struct, that mimics all methods provided by interface.
 			// It is not compulsory, we are doing it here, just to simulate a traditional method call.
 			wg.Add(1)
 			go func(index int, mx [][]int, m2 [][]int, wg *sync.WaitGroup, rm []ResultMatrixPriority) {
-				//fmt.Println("Calling remote server to multiply - J LOOP")
 				defer wg.Done()
-				//fmt.Printf("Connection: %v\n", connSliceArray[jj])
 				// instantiate RPC object
 				matrixMultiply := &MatrixMultRPC{client: rpc.NewClient(connSliceArray[jj])}
-				//fmt.Print("RPC Obj: ")
-				//fmt.Println(matrixMultiply)
-				//fmt.Printf("here.\n")
 				// make a one-element 2d array to pass one row of matrix 1 to the remote call
 				partialM1 := make([][]int, 1)
 				partialM1[0] = mx[jj+1]
-				//fmt.Println(partialM1)
-				//fmt.Printf("here..\n")
 				multiplicationResult := matrixMultiply.MultiplyMatrix(partialM1, m2)
-				//fmt.Printf("here...J-LOOP\n")
 				// make Matrix object out of result
 				resultMatrix := Matrix{matrixArray: multiplicationResult}
 				fmt.Println(resultMatrix)
@@ -293,10 +273,13 @@ func setUpServerConfig(config *tomlConfig) {
 		fmt.Println(err)
 		return
 	}
+	fmt.Println()
 	fmt.Println("::Available Servers::")
 	for serverName, server := range config.Servers {
 		fmt.Printf("Server: %s (%s, %s)\n", serverName, server.IP, server.Port)
 	}
+	fmt.Println("Server: M (localhost, 1242)")
+	fmt.Println()
 }
 
 //Takes in a number of partitions and returns a list of maps of that size.
